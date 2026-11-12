@@ -1,5 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
-import { syllabusSchema, type Syllabus } from "./schemas";
+import {
+  syllabusSchema,
+  topicPlanSchema,
+  type Syllabus,
+  type TopicPlan,
+} from "./schemas";
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-3.5-flash-lite";
 const FALLBACK_MODEL = process.env.GEMINI_FALLBACK_MODEL; // optional
@@ -59,6 +64,10 @@ Rules:
 - Only include events that have a specific date. Skip anything undated.
 - For exams and quizzes, "topics" should list the likely topics covered, based on
   the course schedule up to that date (weekly topics, chapters, lectures).
+- Put each topic as its own separate item in the "topics" array, for example
+  ["Binary search trees", "Balanced trees (AVL, red-black)"]. Never combine
+  several topics into one string, and never start an item with a week range
+  like "Weeks 8-12:".
 - For assignments and projects, "topics" can be a short list of what it involves.
 - "weight" is the grade percentage if stated, otherwise null.
 - Do not invent events or dates that are not in the document.`;
@@ -73,11 +82,58 @@ Rules:
       config: {
         responseMimeType: "application/json",
         temperature: 0.2,
-        httpOptions: { timeout: 40000 }, // give up on one attempt after 40s
+        httpOptions: { timeout: 90000 }, // give up on one attempt after 90s
       },
     })
   );
 
   const json = JSON.parse(response.text ?? "");
   return syllabusSchema.parse(json); // throws if the AI's output is malformed
+}
+
+export async function planTopics(input: {
+  course: string;
+  title: string;
+  type: string;
+  date: string;
+  topics: string[];
+  weight?: string | null;
+}): Promise<TopicPlan> {
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+  const prompt = `You are helping a college student prepare for a ${input.type}.
+Course: ${input.course}
+${input.type}: ${input.title} (${input.date})${input.weight ? `\nWorth: ${input.weight}` : ""}
+
+Topics covered:
+${input.topics.map((t) => `- ${t}`).join("\n")}
+
+For each topic, say how much study time it deserves relative to the others,
+and give one short sentence on what to practice.
+
+Return ONLY JSON in exactly this shape:
+{
+  "topics": [
+    { "name": string, "weight": number from 1 (light review) to 5 (needs the most time), "focus": string }
+  ]
+}
+
+Rules:
+- Use every topic exactly once, with the name copied exactly as written above.
+- Do not add topics that are not in the list.
+- Harder or more foundational topics get higher weights.`;
+
+  const response = await withRetry((model) =>
+    ai.models.generateContent({
+      model,
+      contents: [{ text: prompt }],
+      config: {
+        responseMimeType: "application/json",
+        temperature: 0.2,
+        httpOptions: { timeout: 60000 },
+      },
+    })
+  );
+
+  return topicPlanSchema.parse(JSON.parse(response.text ?? ""));
 }

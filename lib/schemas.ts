@@ -17,3 +17,18 @@ export const syllabusSchema = z.object({
 });
 
 export type Syllabus = z.infer<typeof syllabusSchema>;
+
+export const topicPlanSchema = z.object({
+  topics: z.array(
+    z.object({
+      name: z.string(),
+      weight: z.number().transform((n) => Math.min(5, Math.max(1, n))),
+      focus: z
+        .string()
+        .nullish()
+        .transform((f) => f ?? ""),
+    })
+  ),
+});
+
+export type TopicPlan = z.infer<typeof topicPlanSchema>;
