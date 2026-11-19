@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import FullCalendar from "@fullcalendar/react";
 import themePlugin from "@fullcalendar/react/themes/classic";
 import dayGridPlugin from "@fullcalendar/react/daygrid";
@@ -48,6 +48,17 @@ type UploadedFile = {
     eventCount: number;
 };
 
+type EventDraft = {
+    title: string;
+    course: string;
+    type: string;
+    date: string;
+    topicsText: string;
+    weight: string;
+};
+
+const EVENT_TYPES = ["exam", "quiz", "assignment", "project", "other"] as const;
+
 const COLORS: Record<string, string> = {
     exam: "#dc2626",
     quiz: "#ea580c",
@@ -89,6 +100,7 @@ export default function Calendar() {
     const [showQuiz, setShowQuiz] = useState(false);
     const [planning, setPlanning] = useState(false);
     const [planMessage, setPlanMessage] = useState<string | null>(null);
+    const [editDraft, setEditDraft] = useState<EventDraft | null>(null);
 
     const selected = events.find((e) => e.id === selectedId) ?? null;
     const hoveredEvent = events.find((e) => e.id === hovered?.id) ?? null;
@@ -105,7 +117,10 @@ export default function Calendar() {
     // Close the popup with the Escape key.
     useEffect(() => {
         function onKey(e: KeyboardEvent) {
-            if (e.key === "Escape") setSelectedId(null);
+            if (e.key === "Escape") {
+                setSelectedId(null);
+                setEditDraft(null);
+            }
         }
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
@@ -148,6 +163,41 @@ export default function Calendar() {
         // Also removes any study sessions generated for that file's events.
         setEvents((prev) => prev.filter((e) => e.fileId !== fileId));
         setHovered(null);
+    }
+
+    function startEditingEvent(event: StudyEvent) {
+        setEditDraft({
+            title: event.title,
+            course: event.course,
+            type: event.type,
+            date: event.date,
+            topicsText: event.topics.join("\n"),
+            weight: event.weight ?? "",
+        });
+        setPlanMessage(null);
+    }
+
+    function handleSaveEvent(e: FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        if (!selected || !editDraft) return;
+
+        const updatedEvent: StudyEvent = {
+            ...selected,
+            title: editDraft.title.trim(),
+            course: editDraft.course.trim(),
+            type: editDraft.type,
+            date: editDraft.date,
+            topics: splitTopics(editDraft.topicsText.split(/\r?\n/)),
+            weight: editDraft.weight.trim() || null,
+        };
+
+        setEvents((prev) =>
+            prev
+                .filter((event) => event.forEventId !== selected.id)
+                .map((event) => (event.id === selected.id ? updatedEvent : event))
+        );
+        setEditDraft(null);
+        setPlanMessage(null);
     }
 
     async function handleBuildPlan(ev: StudyEvent) {
@@ -293,6 +343,7 @@ export default function Calendar() {
                             nowIndicator
                             eventClick={(info) => {
                                 setPlanMessage(null);
+                                setEditDraft(null);
                                 setSelectedId(info.event.id);
                             }}
                             eventMouseEnter={(info) => {
@@ -395,7 +446,10 @@ export default function Calendar() {
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
                     style={{ animation: "fadeIn 150ms ease-out" }}
-                    onClick={() => setSelectedId(null)}
+                    onClick={() => {
+                        setSelectedId(null);
+                        setEditDraft(null);
+                    }}
                 >
                     <div
                         role="dialog"
@@ -416,49 +470,157 @@ export default function Calendar() {
                             <button
                                 aria-label="Close"
                                 className="rounded p-1 text-gray-500 hover:bg-gray-100"
-                                onClick={() => setSelectedId(null)}
+                                onClick={() => {
+                                    setSelectedId(null);
+                                    setEditDraft(null);
+                                }}
                             >
                                 ✕
                             </button>
                         </div>
 
-                        {selected.topics.length > 0 && (
-                            <div>
-                                <p className="text-sm font-medium">
-                                    {selected.type === "study" ? "Topics to study" : "Likely topics"}
-                                </p>
-                                <ul className="list-disc pl-5 text-sm text-gray-700">
-                                    {selected.topics.map((t, i) => (
-                                        <li key={i}>{t}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
-
-                        {selected.note && (
-                            <div>
-                                <p className="text-sm font-medium">Focus</p>
-                                <p className="text-sm text-gray-700">{selected.note}</p>
-                            </div>
-                        )}
-
-                        {STUDY_PLAN_TYPES.includes(selected.type) && (
-                            <div className="space-y-2">
-                                <button
-                                    className="w-full rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:bg-gray-400"
-                                    disabled={planning}
-                                    onClick={() => handleBuildPlan(selected)}
-                                >
-                                    {planning
-                                        ? "Building plan..."
-                                        : hasPlan
-                                            ? "Rebuild Study Plan"
-                                            : "Build Study Plan"}
-                                </button>
-                                {planMessage && (
-                                    <p className="text-sm text-red-600">{planMessage}</p>
+                        {editDraft ? (
+                            <form className="space-y-3" onSubmit={handleSaveEvent}>
+                                <label className="block space-y-1 text-sm font-medium">
+                                    Title
+                                    <input
+                                        className="w-full rounded-lg border px-3 py-2 font-normal"
+                                        required
+                                        value={editDraft.title}
+                                        onChange={(e) =>
+                                            setEditDraft({ ...editDraft, title: e.target.value })
+                                        }
+                                    />
+                                </label>
+                                <label className="block space-y-1 text-sm font-medium">
+                                    Course
+                                    <input
+                                        className="w-full rounded-lg border px-3 py-2 font-normal"
+                                        required
+                                        value={editDraft.course}
+                                        onChange={(e) =>
+                                            setEditDraft({ ...editDraft, course: e.target.value })
+                                        }
+                                    />
+                                </label>
+                                <label className="block space-y-1 text-sm font-medium">
+                                    Type
+                                    <select
+                                        className="w-full rounded-lg border px-3 py-2 font-normal"
+                                        value={editDraft.type}
+                                        onChange={(e) =>
+                                            setEditDraft({ ...editDraft, type: e.target.value })
+                                        }
+                                    >
+                                        {EVENT_TYPES.map((type) => (
+                                            <option key={type} value={type}>
+                                                {LABELS[type]}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="block space-y-1 text-sm font-medium">
+                                    Date
+                                    <input
+                                        className="w-full rounded-lg border px-3 py-2 font-normal"
+                                        type="date"
+                                        required
+                                        value={editDraft.date}
+                                        onChange={(e) =>
+                                            setEditDraft({ ...editDraft, date: e.target.value })
+                                        }
+                                    />
+                                </label>
+                                <label className="block space-y-1 text-sm font-medium">
+                                    Topics (one per line)
+                                    <textarea
+                                        className="w-full rounded-lg border px-3 py-2 font-normal"
+                                        rows={4}
+                                        value={editDraft.topicsText}
+                                        onChange={(e) =>
+                                            setEditDraft({
+                                                ...editDraft,
+                                                topicsText: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </label>
+                                <label className="block space-y-1 text-sm font-medium">
+                                    Weight
+                                    <input
+                                        className="w-full rounded-lg border px-3 py-2 font-normal"
+                                        placeholder="e.g. 20% of grade"
+                                        value={editDraft.weight}
+                                        onChange={(e) =>
+                                            setEditDraft({ ...editDraft, weight: e.target.value })
+                                        }
+                                    />
+                                </label>
+                                <div className="flex justify-end gap-2">
+                                    <button
+                                        className="rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
+                                        type="button"
+                                        onClick={() => setEditDraft(null)}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+                                        type="submit"
+                                    >
+                                        Save changes
+                                    </button>
+                                </div>
+                            </form>
+                        ) : (
+                            <>
+                                {selected.topics.length > 0 && (
+                                    <div>
+                                        <p className="text-sm font-medium">
+                                            {selected.type === "study" ? "Topics to study" : "Likely topics"}
+                                        </p>
+                                        <ul className="list-disc pl-5 text-sm text-gray-700">
+                                            {selected.topics.map((t, i) => (
+                                                <li key={i}>{t}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
                                 )}
-                            </div>
+
+                                {selected.note && (
+                                    <div>
+                                        <p className="text-sm font-medium">Focus</p>
+                                        <p className="text-sm text-gray-700">{selected.note}</p>
+                                    </div>
+                                )}
+
+                                {STUDY_PLAN_TYPES.includes(selected.type) && (
+                                    <div className="space-y-2">
+                                        <button
+                                            className="w-full rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700 disabled:bg-gray-400"
+                                            disabled={planning}
+                                            onClick={() => handleBuildPlan(selected)}
+                                        >
+                                            {planning
+                                                ? "Building plan..."
+                                                : hasPlan
+                                                    ? "Rebuild Study Plan"
+                                                    : "Build Study Plan"}
+                                        </button>
+                                        {planMessage && (
+                                            <p className="text-sm text-red-600">{planMessage}</p>
+                                        )}
+                                    </div>
+                                )}
+                                {selected.type !== "study" && !selected.forEventId && (
+                                    <button
+                                        className="w-full rounded-lg border px-4 py-2 text-sm hover:bg-gray-50"
+                                        onClick={() => startEditingEvent(selected)}
+                                    >
+                                        Edit event
+                                    </button>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
