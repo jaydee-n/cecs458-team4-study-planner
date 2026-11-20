@@ -51,6 +51,8 @@ Open http://localhost:3000 to view the prototype.
 3. Click an exam or quiz on the calendar and press **Build Study Plan**.
 4. Click a syllabus event and choose **Edit event** to change its details. Saving removes any study sessions generated for that event; build a new plan to replace them.
 
+**Sample result:** upload a syllabus PDF, click an exam or quiz on the calendar, and press **Build Study Plan**. Study sessions for each topic then appear on the calendar inside your chosen study times, before the exam date, followed by a final review session.
+
 Study preferences, uploaded files, and events are held in memory only for testing purposes. Refreshing the page will clear them.
 
 ## Project Structure
