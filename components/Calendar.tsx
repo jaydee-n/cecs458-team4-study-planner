@@ -24,6 +24,7 @@ import {
     splitTopics,
     type PlanTopic,
 } from "@/lib/scheduler";
+import { validatePlan } from "@/lib/validate";
 
 type StudyEvent = {
     id: string;
@@ -39,6 +40,7 @@ type StudyEvent = {
     endHour?: number;
     forEventId?: string;
     note?: string;
+    checked?: boolean;
 };
 
 type UploadedFile = {
@@ -254,6 +256,14 @@ export default function Calendar() {
             return;
         }
 
+        const check = validatePlan(sessions, { examDate: ev.date, prefs });
+        if (!check.ok) {
+            setPlanMessage(
+                `Couldn't build a valid plan. ${check.issues[0]} Try adjusting your study preferences.`
+            );
+            return;
+        }
+
         const stamp = Date.now();
         const planEvents: StudyEvent[] = sessions.map((s, i) => ({
             id: `plan-${ev.id}-${stamp}-${i}`,
@@ -269,6 +279,7 @@ export default function Calendar() {
             endHour: s.end,
             forEventId: ev.id,
             note: s.note,
+            checked: true,
         }));
 
         // Replace any earlier plan for this event.
@@ -592,6 +603,12 @@ export default function Calendar() {
                                         <p className="text-sm font-medium">Focus</p>
                                         <p className="text-sm text-gray-700">{selected.note}</p>
                                     </div>
+                                )}
+
+                                {selected.checked && (
+                                    <p className="text-xs text-green-700">
+                                        ✓ Checked: inside your available hours and before the deadline
+                                    </p>
                                 )}
 
                                 {STUDY_PLAN_TYPES.includes(selected.type) && (
