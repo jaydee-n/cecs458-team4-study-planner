@@ -49,6 +49,7 @@ Open http://localhost:3000 to view the prototype.
 1. Answer the preferences quiz that pops up on the calendar page. Submit your results, but this can be edited later on.
 2. Click **Start Uploading Documents** in the sidebar and choose a syllabus PDF that includes key deadlines you'd like to meet.
 3. Click an exam or quiz on the calendar and press **Build Study Plan**.
+4. Click a syllabus event and choose **Edit event** to change its details. Saving removes any study sessions generated for that event; build a new plan to replace them.
 
 Study preferences, uploaded files, and events are held in memory only for testing purposes. Refreshing the page will clear them.
 
